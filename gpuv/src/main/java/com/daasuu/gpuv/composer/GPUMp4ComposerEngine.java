@@ -26,6 +26,7 @@ class GPUMp4ComposerEngine {
     private ProgressCallback progressCallback;
     private long durationUs;
     private MediaMetadataRetriever mediaMetadataRetriever;
+    private MediaTrimTime mediaTrimTime;
 
 
     void setDataSource(FileDescriptor fileDescriptor) {
@@ -49,7 +50,8 @@ class GPUMp4ComposerEngine {
             final FillModeCustomItem fillModeCustomItem,
             final int timeScale,
             final boolean flipVertical,
-            final boolean flipHorizontal
+            final boolean flipHorizontal,
+            final MediaTrimTime mediaTrimTime
     ) throws IOException {
 
 
@@ -59,11 +61,21 @@ class GPUMp4ComposerEngine {
             mediaMuxer = new MediaMuxer(destPath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
             mediaMetadataRetriever = new MediaMetadataRetriever();
             mediaMetadataRetriever.setDataSource(inputFileDescriptor);
+            this.mediaTrimTime = mediaTrimTime;
             try {
                 durationUs = Long.parseLong(mediaMetadataRetriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)) * 1000;
             } catch (NumberFormatException e) {
                 durationUs = -1;
             }
+
+            if (mediaTrimTime != null && mediaTrimTime.endTimeInUs > 0 &&  mediaTrimTime.endTimeInUs < durationUs) {
+                durationUs = mediaTrimTime.endTimeInUs;
+            }
+
+            if (mediaTrimTime != null && mediaTrimTime.startTimeInUs > 0 && mediaTrimTime.startTimeInUs < durationUs ) {
+                durationUs -= mediaTrimTime.startTimeInUs;
+            }
+            
             Log.d(TAG, "Duration (us): " + durationUs);
 
             MediaFormat videoOutputFormat = MediaFormat.createVideoFormat("video/avc", outputResolution.getWidth(), outputResolution.getHeight());
@@ -92,7 +104,7 @@ class GPUMp4ComposerEngine {
             }
 
             // setup video composer
-            videoComposer = new VideoComposer(mediaExtractor, videoTrackIndex, videoOutputFormat, muxRender, timeScale);
+            videoComposer = new VideoComposer(mediaExtractor, videoTrackIndex, videoOutputFormat, muxRender, timeScale, mediaTrimTime);
             videoComposer.setUp(filter, rotation, outputResolution, inputResolution, fillMode, fillModeCustomItem, flipVertical, flipHorizontal);
             mediaExtractor.selectTrack(videoTrackIndex);
 
@@ -101,17 +113,25 @@ class GPUMp4ComposerEngine {
                 // has Audio video
 
                 if (timeScale < 2) {
-                    audioComposer = new AudioComposer(mediaExtractor, audioTrackIndex, muxRender);
+                    audioComposer = new AudioComposer(mediaExtractor, audioTrackIndex, muxRender, mediaTrimTime);
                 } else {
-                    audioComposer = new RemixAudioComposer(mediaExtractor, audioTrackIndex, mediaExtractor.getTrackFormat(audioTrackIndex), muxRender, timeScale);
+                    audioComposer = new RemixAudioComposer(mediaExtractor, audioTrackIndex, mediaExtractor.getTrackFormat(audioTrackIndex), muxRender, timeScale, mediaTrimTime);
                 }
 
                 audioComposer.setup();
 
                 mediaExtractor.selectTrack(audioTrackIndex);
 
+                if (mediaTrimTime != null && mediaTrimTime.startTimeInUs > 0) {
+                    mediaExtractor.seekTo(mediaTrimTime.startTimeInUs, MediaExtractor.SEEK_TO_CLOSEST_SYNC);
+                }
+
                 runPipelines();
             } else {
+                if (mediaTrimTime != null && mediaTrimTime.startTimeInUs > 0) {
+                    mediaExtractor.seekTo(mediaTrimTime.startTimeInUs, MediaExtractor.SEEK_TO_CLOSEST_SYNC);
+                }
+
                 // no audio video
                 runPipelinesNoAudio();
             }

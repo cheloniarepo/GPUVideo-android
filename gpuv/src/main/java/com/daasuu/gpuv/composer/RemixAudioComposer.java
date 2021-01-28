@@ -18,6 +18,7 @@ class RemixAudioComposer implements IAudioComposer {
     private static final int DRAIN_STATE_CONSUMED = 2;
 
     private final MediaExtractor extractor;
+    private final MediaTrimTime mediaTrimTime;
     private final MuxRender muxer;
     private long writtenPresentationTimeUs;
 
@@ -35,6 +36,7 @@ class RemixAudioComposer implements IAudioComposer {
     private MediaCodecBufferCompatWrapper encoderBuffers;
 
     private boolean isExtractorEOS;
+    private boolean isTrimEOS;
     private boolean isDecoderEOS;
     private boolean isEncoderEOS;
     private boolean decoderStarted;
@@ -44,12 +46,13 @@ class RemixAudioComposer implements IAudioComposer {
     private final int timeScale;
 
     public RemixAudioComposer(MediaExtractor extractor, int trackIndex,
-                              MediaFormat outputFormat, MuxRender muxer, int timeScale) {
+                              MediaFormat outputFormat, MuxRender muxer, int timeScale, MediaTrimTime mediaTrimTime) {
         this.extractor = extractor;
         this.trackIndex = trackIndex;
         this.outputFormat = outputFormat;
         this.muxer = muxer;
         this.timeScale = timeScale;
+        this.mediaTrimTime = mediaTrimTime;
     }
 
     @Override
@@ -111,12 +114,26 @@ class RemixAudioComposer implements IAudioComposer {
             decoder.queueInputBuffer(result, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM);
             return DRAIN_STATE_NONE;
         }
+        if (isTrimEOS) {
+            extractor.advance();
+            return DRAIN_STATE_NONE;
+        }
 
         final int sampleSize = extractor.readSampleData(decoderBuffers.getInputBuffer(result), 0);
+        if (isPastTrimEndTime(extractor.getSampleTime())){
+            isTrimEOS = true;
+            decoder.queueInputBuffer(result, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM);
+            extractor.advance();
+            return DRAIN_STATE_NONE;
+        }
         final boolean isKeyFrame = (extractor.getSampleFlags() & MediaExtractor.SAMPLE_FLAG_SYNC) != 0;
         decoder.queueInputBuffer(result, 0, sampleSize, extractor.getSampleTime(), isKeyFrame ? MediaCodec.BUFFER_FLAG_SYNC_FRAME : 0);
         extractor.advance();
         return DRAIN_STATE_CONSUMED;
+    }
+
+    private boolean isPastTrimEndTime(long sampleTime) {
+        return mediaTrimTime != null && mediaTrimTime.endTimeInUs > 0 && sampleTime > mediaTrimTime.endTimeInUs;
     }
 
     private int drainDecoder(long timeoutUs) {
@@ -197,7 +214,7 @@ class RemixAudioComposer implements IAudioComposer {
 
     @Override
     public boolean isFinished() {
-        return isEncoderEOS;
+        return isEncoderEOS || isTrimEOS;
     }
 
     @Override

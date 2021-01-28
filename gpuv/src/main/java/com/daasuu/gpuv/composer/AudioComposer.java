@@ -16,17 +16,20 @@ class AudioComposer implements IAudioComposer {
     private final MuxRender muxRender;
     private final MuxRender.SampleType sampleType = MuxRender.SampleType.AUDIO;
     private final MediaCodec.BufferInfo bufferInfo = new MediaCodec.BufferInfo();
+    private final MediaTrimTime mediaTrimTime;
     private int bufferSize;
     private ByteBuffer buffer;
     private boolean isEOS;
+    private boolean isTrimEOS;
     private MediaFormat actualOutputFormat;
     private long writtenPresentationTimeUs;
 
     AudioComposer(MediaExtractor mediaExtractor, int trackIndex,
-                  MuxRender muxRender) {
+                  MuxRender muxRender, MediaTrimTime mediaTrimTime) {
         this.mediaExtractor = mediaExtractor;
         this.trackIndex = trackIndex;
         this.muxRender = muxRender;
+        this.mediaTrimTime = mediaTrimTime;
 
         actualOutputFormat = this.mediaExtractor.getTrackFormat(this.trackIndex);
         this.muxRender.setOutputFormat(this.sampleType, actualOutputFormat);
@@ -48,9 +51,22 @@ class AudioComposer implements IAudioComposer {
         }
         if (trackIndex != this.trackIndex) return false;
 
+        if(isTrimEOS){
+            mediaExtractor.advance();
+            return true;
+        }
+
         buffer.clear();
         int sampleSize = mediaExtractor.readSampleData(buffer, 0);
         assert sampleSize <= bufferSize;
+        if (isPastTrimEndTime(mediaExtractor.getSampleTime())) {
+            buffer.clear();
+            bufferInfo.set(0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM);
+            muxRender.writeSampleData(sampleType, buffer, bufferInfo);
+            mediaExtractor.advance();
+            isTrimEOS = true;
+            return true;
+        }
         boolean isKeyFrame = (mediaExtractor.getSampleFlags() & MediaExtractor.SAMPLE_FLAG_SYNC) != 0;
         int flags = isKeyFrame ? MediaCodec.BUFFER_FLAG_SYNC_FRAME : 0;
         bufferInfo.set(0, sampleSize, mediaExtractor.getSampleTime(), flags);
@@ -68,7 +84,11 @@ class AudioComposer implements IAudioComposer {
 
     @Override
     public boolean isFinished() {
-        return isEOS;
+        return isEOS || isTrimEOS;
+    }
+
+    private boolean isPastTrimEndTime(long sampleTime) {
+        return mediaTrimTime != null && mediaTrimTime.endTimeInUs > 0 && sampleTime > mediaTrimTime.endTimeInUs;
     }
 
     @Override

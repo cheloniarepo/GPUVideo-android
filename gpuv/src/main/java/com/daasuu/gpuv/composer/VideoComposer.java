@@ -19,6 +19,7 @@ class VideoComposer {
     private static final int DRAIN_STATE_CONSUMED = 2;
 
     private final MediaExtractor mediaExtractor;
+    private final MediaTrimTime mediaTrimTime;
     private final int trackIndex;
     private final MediaFormat outputFormat;
     private final MuxRender muxRender;
@@ -31,6 +32,7 @@ class VideoComposer {
     private DecoderSurface decoderSurface;
     private EncoderSurface encoderSurface;
     private boolean isExtractorEOS;
+    private boolean isTrimEOS;
     private boolean isDecoderEOS;
     private boolean isEncoderEOS;
     private boolean decoderStarted;
@@ -39,12 +41,13 @@ class VideoComposer {
     private final int timeScale;
 
     VideoComposer(MediaExtractor mediaExtractor, int trackIndex,
-                  MediaFormat outputFormat, MuxRender muxRender, int timeScale) {
+                  MediaFormat outputFormat, MuxRender muxRender, int timeScale, MediaTrimTime mediaTrimTime) {
         this.mediaExtractor = mediaExtractor;
         this.trackIndex = trackIndex;
         this.outputFormat = outputFormat;
         this.muxRender = muxRender;
         this.timeScale = timeScale;
+        this.mediaTrimTime = mediaTrimTime;
     }
 
 
@@ -55,7 +58,8 @@ class VideoComposer {
                FillMode fillMode,
                FillModeCustomItem fillModeCustomItem,
                final boolean flipVertical,
-               final boolean flipHorizontal) {
+               final boolean flipHorizontal
+               ) {
         mediaExtractor.selectTrack(trackIndex);
         try {
             encoder = MediaCodec.createEncoderByType(outputFormat.getString(MediaFormat.KEY_MIME));
@@ -126,7 +130,7 @@ class VideoComposer {
 
 
     boolean isFinished() {
-        return isEncoderEOS;
+        return isEncoderEOS || isTrimEOS;
     }
 
 
@@ -164,13 +168,26 @@ class VideoComposer {
             decoder.queueInputBuffer(result, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM);
             return DRAIN_STATE_NONE;
         }
+        if (isTrimEOS) {
+            mediaExtractor.advance();
+            return DRAIN_STATE_NONE;
+        }
         int sampleSize = mediaExtractor.readSampleData(decoderInputBuffers[result], 0);
+        if (isPastTrimEndTime(mediaExtractor.getSampleTime())){
+            isTrimEOS = true;
+            decoder.queueInputBuffer(result, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM);
+            mediaExtractor.advance();
+            return DRAIN_STATE_NONE;
+        }
         boolean isKeyFrame = (mediaExtractor.getSampleFlags() & MediaExtractor.SAMPLE_FLAG_SYNC) != 0;
         decoder.queueInputBuffer(result, 0, sampleSize, mediaExtractor.getSampleTime() / timeScale, isKeyFrame ? MediaCodec.BUFFER_FLAG_SYNC_FRAME : 0);
         mediaExtractor.advance();
         return DRAIN_STATE_CONSUMED;
     }
 
+    private boolean isPastTrimEndTime(long sampleTime) {
+        return mediaTrimTime != null && mediaTrimTime.endTimeInUs > 0 && sampleTime > mediaTrimTime.endTimeInUs;
+    }
     private int drainDecoder() {
         if (isDecoderEOS) return DRAIN_STATE_NONE;
         int result = decoder.dequeueOutputBuffer(bufferInfo, 0);

@@ -30,6 +30,7 @@ public class GPUMp4Composer {
     private int timeScale = 1;
     private boolean flipVertical = false;
     private boolean flipHorizontal = false;
+    private MediaTrimTime mediaTrimTime;
 
     private ExecutorService executorService;
 
@@ -85,6 +86,10 @@ public class GPUMp4Composer {
         return this;
     }
 
+    public GPUMp4Composer mediaTrimTime(MediaTrimTime mediaTrimTime) {
+        this.mediaTrimTime = mediaTrimTime;
+        return this;
+    }
 
     public GPUMp4Composer listener(Listener listener) {
         this.listener = listener;
@@ -197,7 +202,8 @@ public class GPUMp4Composer {
                             fillModeCustomItem,
                             timeScale,
                             flipVertical,
-                            flipHorizontal
+                            flipHorizontal,
+                            mediaTrimTime
                     );
 
                 } catch (Exception e) {

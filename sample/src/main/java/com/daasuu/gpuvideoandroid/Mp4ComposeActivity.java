@@ -22,6 +22,7 @@ import android.widget.Toast;
 
 import com.daasuu.gpuv.composer.FillMode;
 import com.daasuu.gpuv.composer.GPUMp4Composer;
+import com.daasuu.gpuv.composer.MediaTrimTime;
 import com.daasuu.gpuv.egl.filter.GlFilter;
 import com.daasuu.gpuv.egl.filter.GlFilterGroup;
 import com.daasuu.gpuv.egl.filter.GlMonochromeFilter;
@@ -173,6 +174,7 @@ public class Mp4ComposeActivity extends AppCompatActivity {
                 .mute(muteCheckBox.isChecked())
                 .flipHorizontal(flipHorizontalCheckBox.isChecked())
                 .flipVertical(flipVerticalCheckBox.isChecked())
+                .mediaTrimTime(new MediaTrimTime(5 * 1_000_000, 15 * 1_000_000))
                 .listener(new GPUMp4Composer.Listener() {
                     @Override
                     public void onProgress(double progress) {
