@@ -100,5 +100,14 @@ public class GPUPlayerView extends GLSurfaceView implements VideoListener {
     public void onRenderedFirstFrame() {
         // do nothing
     }
+
+    public GPUPlayerRenderer getRenderer() {
+        return renderer;
+    }
+
+    public SimpleExoPlayer getPlayer() {
+        return player;
+    }
+
 }
 
