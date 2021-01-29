@@ -3,6 +3,8 @@ package com.daasuu.gpuv.player;
 import android.graphics.SurfaceTexture;
 import android.opengl.GLES20;
 import android.opengl.Matrix;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.view.Surface;
 import com.daasuu.gpuv.egl.*;
@@ -90,8 +92,17 @@ public class GPUPlayerRenderer extends GlFrameBufferObjectRenderer implements Su
         previewFilter = new GlPreviewFilter(previewTexture.getTextureTarget());
         previewFilter.setup();
 
-        Surface surface = new Surface(previewTexture.getSurfaceTexture());
-        this.simpleExoPlayer.setVideoSurface(surface);
+        final Surface surface = new Surface(previewTexture.getSurfaceTexture());
+        Handler mainHandler = new Handler(Looper.getMainLooper());
+
+        Runnable myRunnable = new Runnable() {
+            @Override
+            public void run() {
+                GPUPlayerRenderer.this.simpleExoPlayer.setVideoSurface(surface);
+            }
+        };
+        mainHandler.post(myRunnable);
+
 
         Matrix.setLookAtM(VMatrix, 0,
                 0.0f, 0.0f, 5.0f,

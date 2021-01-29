@@ -28,7 +28,7 @@ import java.util.List;
 
 public class PlayerActivity extends AppCompatActivity {
 
-    private static final String STREAM_URL_MP4_VOD_LONG = "https://www.radiantmediaplayer.com/media/bbb-360p.mp4";
+    private static final String STREAM_URL_MP4_VOD_LONG = "https://www.learningcontainer.com/wp-content/uploads/2020/05/sample-mp4-file.mp4";
 
     public static void startActivity(Activity activity) {
         Intent intent = new Intent(activity, PlayerActivity.class);
