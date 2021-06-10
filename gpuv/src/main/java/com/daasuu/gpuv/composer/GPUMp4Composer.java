@@ -1,14 +1,16 @@
 package com.daasuu.gpuv.composer;
 
+import android.content.Context;
 import android.media.MediaMetadataRetriever;
+import android.net.Uri;
+import android.os.ParcelFileDescriptor;
 import android.util.Log;
 import android.util.Size;
+
 import com.daasuu.gpuv.egl.filter.GlFilter;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.IOException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -17,7 +19,8 @@ public class GPUMp4Composer {
 
     private final static String TAG = GPUMp4Composer.class.getSimpleName();
 
-    private final String srcPath;
+    private final Context context;
+    private final Uri source;
     private final String destPath;
     private GlFilter filter;
     private Size outputResolution;
@@ -35,8 +38,16 @@ public class GPUMp4Composer {
     private ExecutorService executorService;
 
 
-    public GPUMp4Composer(final String srcPath, final String destPath) {
-        this.srcPath = srcPath;
+    public GPUMp4Composer(Context context, final String srcPath, final String destPath) {
+        this.context = context;
+        this.source = Uri.fromFile(new File(srcPath));
+        this.destPath = destPath;
+    }
+
+
+    public GPUMp4Composer(Context context, Uri source, final String destPath) {
+        this.context = context;
+        this.source = source;
         this.destPath = destPath;
     }
 
@@ -124,10 +135,9 @@ public class GPUMp4Composer {
                     }
                 });
 
-                final File srcFile = new File(srcPath);
-                final FileInputStream fileInputStream;
+                final ParcelFileDescriptor fileDescriptor;
                 try {
-                    fileInputStream = new FileInputStream(srcFile);
+                    fileDescriptor = context.getContentResolver().openFileDescriptor(source, "r");
                 } catch (FileNotFoundException e) {
                     e.printStackTrace();
                     if (listener != null) {
@@ -137,8 +147,10 @@ public class GPUMp4Composer {
                 }
 
                 try {
-                    engine.setDataSource(fileInputStream.getFD());
-                } catch (IOException e) {
+                    if (fileDescriptor != null) {
+                        engine.setDataSource(fileDescriptor.getFileDescriptor());
+                    }
+                } catch (Exception e) {
                     e.printStackTrace();
                     if (listener != null) {
                         listener.onFailed(e);
@@ -146,8 +158,8 @@ public class GPUMp4Composer {
                     return;
                 }
 
-                final int videoRotate = getVideoRotation(srcPath);
-                final Size srcVideoResolution = getVideoResolution(srcPath, videoRotate);
+                final int videoRotate = getVideoRotation(context, source);
+                final Size srcVideoResolution = getVideoResolution(context, source);
 
                 if (filter == null) {
                     filter = new GlFilter();
@@ -252,13 +264,13 @@ public class GPUMp4Composer {
         void onFailed(Exception exception);
     }
 
-    private int getVideoRotation(String videoFilePath) {
+    private int getVideoRotation(Context context, Uri uri) {
         MediaMetadataRetriever mediaMetadataRetriever = null;
         try {
             mediaMetadataRetriever = new MediaMetadataRetriever();
-            mediaMetadataRetriever.setDataSource(videoFilePath);
+            mediaMetadataRetriever.setDataSource(context, uri);
             String orientation = mediaMetadataRetriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION);
-            return Integer.valueOf(orientation);
+            return Integer.parseInt(orientation);
         } catch (IllegalArgumentException e) {
             Log.e("MediaMetadataRetriever", "getVideoRotation IllegalArgumentException");
             return 0;
@@ -285,13 +297,13 @@ public class GPUMp4Composer {
         return bitrate;
     }
 
-    private Size getVideoResolution(final String path, final int rotation) {
+    private Size getVideoResolution(Context context, Uri uri) {
         MediaMetadataRetriever retriever = null;
         try {
             retriever = new MediaMetadataRetriever();
-            retriever.setDataSource(path);
-            int width = Integer.valueOf(retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH));
-            int height = Integer.valueOf(retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT));
+            retriever.setDataSource(context, uri);
+            int width = Integer.parseInt(retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH));
+            int height = Integer.parseInt(retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT));
 
             return new Size(width, height);
         } finally {
