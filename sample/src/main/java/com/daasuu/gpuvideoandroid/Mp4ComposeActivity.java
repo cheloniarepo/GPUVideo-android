@@ -166,7 +166,7 @@ public class Mp4ComposeActivity extends AppCompatActivity {
         findViewById(R.id.start_play_movie).setEnabled(false);
 
         GPUMp4Composer = null;
-        GPUMp4Composer = new GPUMp4Composer(videoItem.getPath(), videoPath)
+        GPUMp4Composer = new GPUMp4Composer(this, videoItem.getPath(), videoPath)
                 // .rotation(Rotation.ROTATION_270)
                 //.size(720, 720)
                 .fillMode(FillMode.PRESERVE_ASPECT_CROP)
